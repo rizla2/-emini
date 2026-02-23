@@ -97,7 +97,7 @@ generation_config = {
 
 # Initialize the Pro model
 model = genai.GenerativeModel(
-    model_name="gemini-3.1-pro-preview",
+    model_name="gemini-3.0-pro",
     system_instruction=current_instruction,
     safety_settings=safety_settings,
     generation_config=generation_config,
