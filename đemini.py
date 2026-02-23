@@ -6,7 +6,7 @@ import google.generativeai as genai
 VALID_USER = st.secrets["APP_USER"]
 VALID_PASS = st.secrets["APP_PASS"]
 API_KEY = st.secrets["GEMINI_API_KEY"]  
-MODEL_NAME = "gemini-2.5-flash"
+MODEL_NAME = "gemini-3.1-pro-preview"
 
 st.set_page_config(page_title="AI Business Hub", page_icon="🏢", layout="wide")
 
@@ -90,11 +90,19 @@ safety_settings = [
     {"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_NONE"}
 ]
 
-# Initialize model
+# Maximize correctness config
+generation_config = {
+    "temperature": 0.1,  # Near-zero temperature forces factual, deterministic outputs
+    "thinking_config": {"thinking_level": "HIGH"}  # Enables the extended reasoning logic
+    # "response_mime_type": "application/json" # Uncomment this ONLY if you need strict JSON-LD Schema output without Markdown text
+}
+
+# Initialize the Pro model
 model = genai.GenerativeModel(
-    model_name=MODEL_NAME,
+    model_name="gemini-3.1-pro-preview",
     system_instruction=current_instruction,
     safety_settings=safety_settings,
+    generation_config=generation_config,
     tools=[
         genai.protos.Tool(
             google_search=genai.protos.Tool.GoogleSearch()
