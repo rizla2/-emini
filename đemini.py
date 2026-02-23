@@ -8,7 +8,7 @@ VALID_USER = st.secrets["APP_USER"]
 VALID_PASS = st.secrets["APP_PASS"]
 API_KEY = st.secrets["GEMINI_API_KEY"]  
 # In 2026, the generativeai library supports the Gemini 3 series
-MODEL_NAME = "gemini-3-flash" 
+MODEL_NAME = "gemini-3.1-pro-preview" 
 
 st.set_page_config(page_title="AI Business Hub", page_icon="🏢", layout="wide")
 
