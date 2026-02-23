@@ -92,9 +92,12 @@ model = genai.GenerativeModel(
     model_name=MODEL_NAME,
     system_instruction=current_instruction,
     safety_settings=safety_settings,
-    tools="google_search" 
+    tools=[
+        genai.protos.Tool(
+            google_search=genai.protos.Tool.GoogleSearch()
+        )
+    ]
 )
-
 # --- 6. CHAT INTERFACE & MEMORY ---
 st.title(f"{selected_business}")
 st.subheader(f"Active Persona: {selected_persona_name}")
