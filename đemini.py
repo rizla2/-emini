@@ -97,7 +97,7 @@ generation_config = {
 
 # Initialize the Pro model
 model = genai.GenerativeModel(
-    model_name="gemini-3.0-pro-preview",
+    model_name="gemini-3-pro-preview",
     system_instruction=current_instruction,
     safety_settings=safety_settings,
     generation_config=generation_config,
@@ -166,3 +166,4 @@ if prompt := st.chat_input("How can I help with BettingBuddyReviews today?"):
                 status.update(label="❌ API Error", state="error")
 
                 st.error(f"Error: {str(e)}")
+
