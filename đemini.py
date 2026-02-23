@@ -92,7 +92,7 @@ model = genai.GenerativeModel(
     model_name=MODEL_NAME,
     system_instruction=current_instruction,
     safety_settings=safety_settings,
-    tools="google_search_retrieval"
+    tools="google_search" 
 )
 
 # --- 6. CHAT INTERFACE & MEMORY ---
