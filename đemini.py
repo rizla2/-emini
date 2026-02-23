@@ -108,24 +108,32 @@ model = genai.GenerativeModel(
     ]
 )
 # --- 6. CHAT INTERFACE & MEMORY ---
-import requests
-
-# --- 6. CHAT INTERFACE & MEMORY ---
 st.title(f"{selected_business}")
 st.subheader(f"Active Persona: {selected_persona_name}")
 
-if "messages" not in st.session_state:
-    st.session_state.messages = []
+# (Keep your existing history and message display code here...)
 
-if "current_persona" not in st.session_state or st.session_state.current_persona != current_instruction:
-    st.session_state.chat_session = model.start_chat(history=[])
-    st.session_state.current_persona = current_instruction
-    st.session_state.messages = [] 
-
-for message in st.session_state.messages:
-    with st.chat_message(message["role"]):
-        st.markdown(message["content"])
-
+if prompt := st.chat_input("Type your request..."):
+    with st.chat_message("user"):
+        st.markdown(prompt)
+    st.session_state.messages.append({"role": "user", "content": prompt})
+    
+    with st.chat_message("assistant"):
+        # This status box stays open until the AI finishes
+        with st.status("🔮 Gemini is processing (Thinking & Searching)...", expanded=True) as status:
+            try:
+                # 1. Start the API call
+                response = st.session_state.chat_session.send_message(prompt)
+                
+                # 2. Once finished, update the status
+                status.update(label="✅ Content Generated!", state="complete", expanded=False)
+                
+                # 3. Show the final text
+                st.markdown(response.text)
+                st.session_state.messages.append({"role": "assistant", "content": response.text})
+            except Exception as e:
+                status.update(label="❌ Error Occurred", state="error")
+                st.error(f"API Error: {str(e)}")
 # User Input
 if prompt := st.chat_input("Type a Casino URL (e.g., https://pokies2go.io/terms) or a request..."):
     with st.chat_message("user"):
