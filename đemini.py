@@ -111,27 +111,42 @@ model = genai.GenerativeModel(
 st.title(f"🏢 {selected_business}")
 st.subheader(f"Active Persona: {selected_persona_name}")
 
-# FIX: Initialize the list immediately so it exists before we try to append to it
+# 1. INITIALIZE ALL STATE VARIABLES AT THE START
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
-# Display past messages
+if "current_persona" not in st.session_state:
+    st.session_state.current_persona = current_instruction
+
+# 2. HANDLE PERSONA SWITCHING
+# If the user changes the persona in the sidebar, clear the chat and reset the session
+if st.session_state.current_persona != current_instruction:
+    st.session_state.messages = []
+    st.session_state.chat_session = model.start_chat(history=[])
+    st.session_state.current_persona = current_instruction
+
+# 3. INITIALIZE THE CHAT SESSION IF IT DOESN'T EXIST
+if "chat_session" not in st.session_state or st.session_state.chat_session is None:
+    st.session_state.chat_session = model.start_chat(history=[])
+
+# 4. DISPLAY MESSAGE HISTORY
 for message in st.session_state.messages:
     with st.chat_message(message["role"]):
         st.markdown(message["content"])
 
-# User Input
-if prompt := st.chat_input("Type your request here..."):
-    # Now this append will work because we initialized "messages" above
-    st.session_state.messages.append({"role": "user", "content": prompt})
+# 5. USER INPUT LOGIC
+if prompt := st.chat_input("How can I help with BettingBuddyReviews today?"):
     
+    # Save and display user prompt
+    st.session_state.messages.append({"role": "user", "content": prompt})
     with st.chat_message("user"):
         st.markdown(prompt)
     
+    # Generate Assistant Response
     with st.chat_message("assistant"):
-        with st.status("🧠 Gemini 3.1 Pro is thinking...", expanded=True) as status:
+        with st.status("🧠 Gemini 3.1 Pro is reasoning...", expanded=True) as status:
             try:
-                # Using stream=True so you see results immediately
+                # Use the session that we guaranteed exists above
                 response = st.session_state.chat_session.send_message(prompt, stream=True)
                 
                 placeholder = st.empty()
@@ -142,8 +157,9 @@ if prompt := st.chat_input("Type your request here..."):
                     placeholder.markdown(full_response + "▌")
                 
                 placeholder.markdown(full_response)
-                status.update(label="✅ Analysis Complete", state="complete", expanded=False)
+                status.update(label="✅ Content Ready", state="complete", expanded=False)
                 
+                # Save to history
                 st.session_state.messages.append({"role": "assistant", "content": full_response})
                 
             except Exception as e:
