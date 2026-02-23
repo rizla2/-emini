@@ -7,7 +7,6 @@ import io
 VALID_USER = st.secrets["APP_USER"]
 VALID_PASS = st.secrets["APP_PASS"]
 API_KEY = st.secrets["GEMINI_API_KEY"]  
-# In 2026, the generativeai library supports the Gemini 3 series
 MODEL_NAME = "gemini-3.1-pro-preview" 
 
 st.set_page_config(page_title="AI Business Hub", page_icon="🏢", layout="wide")
@@ -21,8 +20,7 @@ if not st.session_state.logged_in:
     with st.form("login_form"):
         username = st.text_input("Username")
         password = st.text_input("Password", type="password")
-        submit = st.form_submit_button("Login")
-        if submit:
+        if st.form_submit_button("Login"):
             if username == VALID_USER and password == VALID_PASS:
                 st.session_state.logged_in = True
                 st.rerun()
@@ -30,18 +28,18 @@ if not st.session_state.logged_in:
                 st.error("Invalid credentials.")
     st.stop()
 
-# --- 3. BUSINESS CONTEXTS (Restored exactly) ---
+# --- 3. BUSINESS CONTEXTS ---
 BUSINESS_CONTEXTS = {
     "🎰 Casino Affiliate Site": {
         "The Math Geek (Strategy)": "You are a probability expert writing for a casino portal. Focus on RTP, variance, and math. No fluff.",
         "The Compliance Auditor": "You are an iGaming compliance auditor. Focus strictly on 2026 licensing, data protection, and terms.",
         "The Showdown Critic": "You are a ruthless casino critic comparing two brands. Focus on payout speeds and bonus terms.",
         "The SEO Content Writer": "You are a senior SEO content writer for an iGaming affiliate network. Write comprehensive content optimized for 2026 search intent.",
-        "The On-Page SEO Optimizer": "You are a technical On-Page SEO specialist. Generate meta titles, descriptions, and JSON-LD schema.",
-        "The News & Promo Updater": "You are a fast-paced iGaming news journalist. Rewrite news with latest 2026 data."
+        "The On-Page SEO Optimizer": "Generate meta titles, descriptions, and JSON-LD schema.",
+        "The News & Promo Updater": "Rewrite casino reviews/news with latest 2026 data and bonus codes."
     },
     "🧠 General Use": {
-        "Default Assistant": "You are a highly capable, general-purpose AI assistant. Be direct and factual."
+        "Default Assistant": "You are a direct and factual AI assistant."
     },
 }
 
@@ -70,7 +68,7 @@ def get_excel_data(text):
     try:
         if "|" in text and "---" in text:
             clean_lines = [l.strip() for l in text.split('\n') if "|" in l]
-            df = pd.read_csv(io.StringIO('\n'.join(clean_lines)), sep="|").dropna(axis=1, how='all')
+            df = pd.read_csv(io.StringIO('\n'.join(clean_lines)), sep="|", skipinitialspace=True).dropna(axis=1, how='all')
             df.columns = [c.strip() for c in df.columns]
         else:
             df = pd.DataFrame({"Content": [text]})
@@ -86,20 +84,18 @@ genai.configure(api_key=API_KEY)
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
-# Logic to restart session if Persona changes
 if "active_persona" not in st.session_state or st.session_state.active_persona != current_instruction:
     st.session_state.active_persona = current_instruction
     st.session_state.messages = []
     
-    # Enable Google Search grounding for this session
     model = genai.GenerativeModel(
         model_name=MODEL_NAME,
         system_instruction=current_instruction,
-        tools=[{"google_search_retrieval": {}}] 
+        tools=[{"google_search": {}}]
     )
     st.session_state.chat_session = model.start_chat(history=[])
 
-# --- 7. CHAT INTERFACE ---
+# --- 7. CHAT UI ---
 st.title(f"🏢 {selected_business}")
 
 for i, msg in enumerate(st.session_state.messages):
@@ -117,13 +113,12 @@ if prompt := st.chat_input("How can I help today?"):
         st.markdown(prompt)
 
     with st.chat_message("assistant"):
-        with st.status("🧠 Searching & Reasoning...") as status:
+        with st.status("🧠 Processing...") as status:
             try:
                 response = st.session_state.chat_session.send_message(prompt)
                 full_text = response.text
                 st.markdown(full_text)
                 
-                # Action Buttons
                 c1, c2, c3 = st.columns(3)
                 curr_idx = len(st.session_state.messages)
                 c1.button("📋 Copy", key=f"cp_now_{curr_idx}", on_click=copy_to_clipboard, args=(full_text,))
@@ -131,6 +126,6 @@ if prompt := st.chat_input("How can I help today?"):
                 c3.download_button("📊 XLS", get_excel_data(full_text), "data.xlsx", key=f"xl_now_{curr_idx}")
 
                 st.session_state.messages.append({"role": "assistant", "content": full_text})
-                status.update(label="✅ Complete", state="complete")
+                status.update(label="✅ Ready", state="complete")
             except Exception as e:
                 st.error(f"Error: {e}")
