@@ -1,6 +1,6 @@
 import streamlit as st
-import google.generativeai as genai
-from google.generativeai import protos
+from google import genai
+from google.genai import types
 import pandas as pd
 import io
 
@@ -8,7 +8,7 @@ import io
 VALID_USER = st.secrets["APP_USER"]
 VALID_PASS = st.secrets["APP_PASS"]
 API_KEY = st.secrets["GEMINI_API_KEY"]  
-MODEL_NAME = "gemini-3.1-pro-preview" 
+MODEL_ID = "gemini-3.1-pro-preview" 
 
 st.set_page_config(page_title="AI Business Hub", page_icon="🏢", layout="wide")
 
@@ -80,20 +80,7 @@ def get_excel_data(text):
     return output.getvalue()
 
 # --- 6. GEMINI SETUP ---
-genai.configure(api_key=API_KEY)
-
-# CORRECT TOOL DEFINITION FOR GOOGLE-GENERATIVEAI SDK
-# This bypasses the ValueError by manually defining the proto tool
-tools = [
-    protos.Tool(
-        google_search_retrieval=protos.GoogleSearchRetrieval(
-            dynamic_retrieval_config=protos.DynamicRetrievalConfig(
-                mode=protos.DynamicRetrievalConfig.Mode.DYNAMIC,
-                dynamic_threshold=0.3,
-            )
-        )
-    )
-]
+client = genai.Client(api_key=API_KEY)
 
 if "messages" not in st.session_state:
     st.session_state.messages = []
@@ -102,12 +89,13 @@ if "active_persona" not in st.session_state or st.session_state.active_persona !
     st.session_state.active_persona = current_instruction
     st.session_state.messages = []
     
-    model = genai.GenerativeModel(
-        model_name=MODEL_NAME,
-        system_instruction=current_instruction,
-        tools=tools
+    st.session_state.chat_session = client.chats.create(
+        model=MODEL_ID,
+        config=types.GenerateContentConfig(
+            system_instruction=current_instruction,
+            tools=[{"google_search": {}}]
+        )
     )
-    st.session_state.chat_session = model.start_chat(history=[])
 
 # --- 7. CHAT UI ---
 st.title(f"🏢 {selected_business}")
@@ -127,7 +115,7 @@ if prompt := st.chat_input("How can I help today?"):
         st.markdown(prompt)
 
     with st.chat_message("assistant"):
-        with st.status("🧠 Searching & Reasoning...") as status:
+        with st.status("🧠 Processing...") as status:
             try:
                 response = st.session_state.chat_session.send_message(prompt)
                 full_text = response.text
