@@ -8,7 +8,7 @@ import io
 VALID_USER = st.secrets["APP_USER"]
 VALID_PASS = st.secrets["APP_PASS"]
 API_KEY = st.secrets["GEMINI_API_KEY"]  
-MODEL_ID = "gemini-3.1-pro-preview" 
+MODEL_ID = "gemini-3-pro-preview" 
 
 st.set_page_config(page_title="AI Business Hub", page_icon="🏢", layout="wide")
 
