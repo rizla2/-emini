@@ -108,57 +108,44 @@ model = genai.GenerativeModel(
     ]
 )
 # --- 6. CHAT INTERFACE & MEMORY ---
-st.title(f"{selected_business}")
+st.title(f"🏢 {selected_business}")
 st.subheader(f"Active Persona: {selected_persona_name}")
 
-# (Keep your existing history and message display code here...)
+# FIX: Initialize the list immediately so it exists before we try to append to it
+if "messages" not in st.session_state:
+    st.session_state.messages = []
 
-if prompt := st.chat_input("Type your request..."):
-    with st.chat_message("user"):
-        st.markdown(prompt)
-    st.session_state.messages.append({"role": "user", "content": prompt})
-    
-    with st.chat_message("assistant"):
-        # This status box stays open until the AI finishes
-        with st.status("🔮 Gemini is processing (Thinking & Searching)...", expanded=True) as status:
-            try:
-                # 1. Start the API call
-                response = st.session_state.chat_session.send_message(prompt)
-                
-                # 2. Once finished, update the status
-                status.update(label="✅ Content Generated!", state="complete", expanded=False)
-                
-                # 3. Show the final text
-                st.markdown(response.text)
-                st.session_state.messages.append({"role": "assistant", "content": response.text})
-            except Exception as e:
-                status.update(label="❌ Error Occurred", state="error")
-                st.error(f"API Error: {str(e)}")
+# Display past messages
+for message in st.session_state.messages:
+    with st.chat_message(message["role"]):
+        st.markdown(message["content"])
+
 # User Input
-if prompt := st.chat_input("Type a Casino URL (e.g., https://pokies2go.io/terms) or a request..."):
-    with st.chat_message("user"):
-        st.markdown(prompt)
+if prompt := st.chat_input("Type your request here..."):
+    # Now this append will work because we initialized "messages" above
     st.session_state.messages.append({"role": "user", "content": prompt})
     
-    # Intercept URLs and scrape the actual page content
-    if "http://" in prompt or "https://" in prompt:
-        try:
-            target_url = prompt.strip()
-            scrape_url = f"https://r.jina.ai/{target_url}"
-            scraped_data = requests.get(scrape_url).text
-            
-            # Inject the raw scraped text into the prompt silently
-            internal_prompt = f"Analyze this exact website data:\n\n{scraped_data}\n\nExecute the task assigned to your persona based ONLY on this text."
-        except Exception as e:
-            internal_prompt = prompt
-            st.error(f"Failed to scrape URL: {str(e)}")
-    else:
-        internal_prompt = prompt
-
+    with st.chat_message("user"):
+        st.markdown(prompt)
+    
     with st.chat_message("assistant"):
-        try:
-            response = st.session_state.chat_session.send_message(internal_prompt)
-            st.markdown(response.text)
-            st.session_state.messages.append({"role": "assistant", "content": response.text})
-        except Exception as e:
-            st.error(f"API Error: {str(e)}")
+        with st.status("🧠 Gemini 3.1 Pro is thinking...", expanded=True) as status:
+            try:
+                # Using stream=True so you see results immediately
+                response = st.session_state.chat_session.send_message(prompt, stream=True)
+                
+                placeholder = st.empty()
+                full_response = ""
+                
+                for chunk in response:
+                    full_response += chunk.text
+                    placeholder.markdown(full_response + "▌")
+                
+                placeholder.markdown(full_response)
+                status.update(label="✅ Analysis Complete", state="complete", expanded=False)
+                
+                st.session_state.messages.append({"role": "assistant", "content": full_response})
+                
+            except Exception as e:
+                status.update(label="❌ API Error", state="error")
+                st.error(f"Error: {str(e)}")
