@@ -90,80 +90,99 @@ safety_settings = [
     {"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_NONE"}
 ]
 
-# Maximize correctness config
 generation_config = {
-    "temperature": 0.1  # Near-zero temperature forces factual, deterministic outputs
+    "temperature": 0.1
 }
 
-# Initialize the Pro model
+# Initialize the model with Google Search Grounding enabled
 model = genai.GenerativeModel(
-    model_name="gemini-3-pro-preview",
+    model_name="gemini-3.0-pro",
     system_instruction=current_instruction,
     safety_settings=safety_settings,
     generation_config=generation_config,
-    tools=[
-        genai.protos.Tool(
-            google_search=genai.protos.Tool.GoogleSearch()
-        )
-    ]
+    tools=[{"google_search": {}}] # Simplified tool definition for 2026 SDK
 )
 # --- 6. CHAT INTERFACE & MEMORY ---
 st.title(f"🏢 {selected_business}")
 st.subheader(f"Active Persona: {selected_persona_name}")
 
-# 1. INITIALIZE ALL STATE VARIABLES AT THE START
+# Helper function for the Copy Button logic
+def copy_to_clipboard(text):
+    # This uses a standard JS hack to copy text in the browser
+    js = f"""
+    <script>
+    navigator.clipboard.writeText({repr(text)});
+    </script>
+    """
+    st.components.v1.html(js, height=0)
+    st.toast("Response copied to clipboard!", icon="📋")
+
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
 if "current_persona" not in st.session_state:
     st.session_state.current_persona = current_instruction
 
-# 2. HANDLE PERSONA SWITCHING
-# If the user changes the persona in the sidebar, clear the chat and reset the session
+# Handle Persona switching
 if st.session_state.current_persona != current_instruction:
     st.session_state.messages = []
     st.session_state.chat_session = model.start_chat(history=[])
     st.session_state.current_persona = current_instruction
 
-# 3. INITIALIZE THE CHAT SESSION IF IT DOESN'T EXIST
 if "chat_session" not in st.session_state or st.session_state.chat_session is None:
     st.session_state.chat_session = model.start_chat(history=[])
 
 # 4. DISPLAY MESSAGE HISTORY
-for message in st.session_state.messages:
+for i, message in enumerate(st.session_state.messages):
     with st.chat_message(message["role"]):
         st.markdown(message["content"])
+        
+        if message["role"] == "assistant":
+            # Show sources if they exist
+            if "sources" in message and message["sources"]:
+                with st.expander("🔍 Verified Sources"):
+                    for src in message["sources"]:
+                        st.write(f"- [{src['title']}]({src['url']})")
+            
+            # COPY BUTTON for history
+            st.button("📋 Copy Response", key=f"copy_{i}", on_click=copy_to_clipboard, args=(message["content"],))
 
 # 5. USER INPUT LOGIC
-if prompt := st.chat_input("How can I help with BettingBuddyReviews today?"):
-    
-    # Save and display user prompt
+if prompt := st.chat_input("How can I help with your business today?"):
     st.session_state.messages.append({"role": "user", "content": prompt})
     with st.chat_message("user"):
         st.markdown(prompt)
     
-    # Generate Assistant Response
     with st.chat_message("assistant"):
-        with st.status("🧠 Gemini 3.1 Pro is reasoning...", expanded=True) as status:
+        with st.status("🧠 Gemini is searching and reasoning...", expanded=True) as status:
             try:
-                # Use the session that we guaranteed exists above
-                response = st.session_state.chat_session.send_message(prompt, stream=True)
+                response = st.session_state.chat_session.send_message(prompt, stream=False)
+                full_response = response.text
+                st.markdown(full_response)
                 
-                placeholder = st.empty()
-                full_response = ""
+                # Extract Grounding Sources
+                sources = []
+                if response.candidates[0].grounding_metadata:
+                    metadata = response.candidates[0].grounding_metadata
+                    if metadata.grounding_chunks:
+                        with st.expander("🔍 Verified Sources"):
+                            for chunk in metadata.grounding_chunks:
+                                if chunk.web:
+                                    sources.append({"title": chunk.web.title, "url": chunk.web.uri})
+                                    st.write(f"- [{chunk.web.title}]({chunk.web.uri})")
+
+                status.update(label="✅ Content Verified", state="complete", expanded=False)
                 
-                for chunk in response:
-                    full_response += chunk.text
-                    placeholder.markdown(full_response + "▌")
-                
-                placeholder.markdown(full_response)
-                status.update(label="✅ Content Ready", state="complete", expanded=False)
-                
+                # COPY BUTTON for new response
+                st.button("📋 Copy Response", key=f"copy_{len(st.session_state.messages)}", on_click=copy_to_clipboard, args=(full_response,))
+
                 # Save to history
-                st.session_state.messages.append({"role": "assistant", "content": full_response})
+                st.session_state.messages.append({
+                    "role": "assistant", 
+                    "content": full_response,
+                    "sources": sources
+                })
                 
             except Exception as e:
                 status.update(label="❌ API Error", state="error")
-
                 st.error(f"Error: {str(e)}")
-
