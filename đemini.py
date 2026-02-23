@@ -80,12 +80,14 @@ def get_excel_data(text):
     return output.getvalue()
 
 # --- 6. GEMINI SETUP ---
-client = genai.Client(api_key=API_KEY)
+if "gemini_client" not in st.session_state:
+    st.session_state.gemini_client = genai.Client(api_key=API_KEY)
+
+client = st.session_state.gemini_client
 
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
-# Added check for missing or None chat_session
 if "chat_session" not in st.session_state or st.session_state.chat_session is None or st.session_state.get("active_persona") != current_instruction:
     st.session_state.active_persona = current_instruction
     st.session_state.messages = []
