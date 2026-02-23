@@ -50,7 +50,7 @@ BUSINESS_CONTEXTS = {
     },
     "🧠 General Use": {
         "Default Assistant": "You are a highly capable, general-purpose AI assistant. Be direct and factual."
-    }
+    },
 }
 
 # --- 4. SIDEBAR & SETTINGS ---
