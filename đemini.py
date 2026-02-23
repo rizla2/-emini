@@ -92,9 +92,7 @@ safety_settings = [
 
 # Maximize correctness config
 generation_config = {
-    "temperature": 0.1,  # Near-zero temperature forces factual, deterministic outputs
-    "thinking_config": {"thinking_level": "HIGH"}  # Enables the extended reasoning logic
-    # "response_mime_type": "application/json" # Uncomment this ONLY if you need strict JSON-LD Schema output without Markdown text
+    "temperature": 0.1  # Near-zero temperature forces factual, deterministic outputs
 }
 
 # Initialize the Pro model
