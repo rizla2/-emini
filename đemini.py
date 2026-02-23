@@ -6,7 +6,7 @@ import google.generativeai as genai
 VALID_USER = st.secrets["APP_USER"]
 VALID_PASS = st.secrets["APP_PASS"]
 API_KEY = st.secrets["GEMINI_API_KEY"]  
-MODEL_NAME = "gemini-3.1-pro-preview"
+MODEL_NAME = "gemini-2.5-flash"
 
 st.set_page_config(page_title="AI Business Hub", page_icon="🏢", layout="wide")
 
