@@ -99,31 +99,48 @@ model = genai.GenerativeModel(
     ]
 )
 # --- 6. CHAT INTERFACE & MEMORY ---
+import requests
+
+# --- 6. CHAT INTERFACE & MEMORY ---
 st.title(f"{selected_business}")
 st.subheader(f"Active Persona: {selected_persona_name}")
 
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
-# Reset the chat session if the user changes the Persona/Business
-# This prevents the E-commerce bot from remembering Casino data
 if "current_persona" not in st.session_state or st.session_state.current_persona != current_instruction:
     st.session_state.chat_session = model.start_chat(history=[])
     st.session_state.current_persona = current_instruction
-    st.session_state.messages = [] # Clears screen on persona switch
+    st.session_state.messages = [] 
 
 for message in st.session_state.messages:
     with st.chat_message(message["role"]):
         st.markdown(message["content"])
 
-if prompt := st.chat_input("Type your request..."):
+# User Input
+if prompt := st.chat_input("Type a Casino URL (e.g., https://pokies2go.io/terms) or a request..."):
     with st.chat_message("user"):
         st.markdown(prompt)
     st.session_state.messages.append({"role": "user", "content": prompt})
     
+    # Intercept URLs and scrape the actual page content
+    if "http://" in prompt or "https://" in prompt:
+        try:
+            target_url = prompt.strip()
+            scrape_url = f"https://r.jina.ai/{target_url}"
+            scraped_data = requests.get(scrape_url).text
+            
+            # Inject the raw scraped text into the prompt silently
+            internal_prompt = f"Analyze this exact website data:\n\n{scraped_data}\n\nExecute the task assigned to your persona based ONLY on this text."
+        except Exception as e:
+            internal_prompt = prompt
+            st.error(f"Failed to scrape URL: {str(e)}")
+    else:
+        internal_prompt = prompt
+
     with st.chat_message("assistant"):
         try:
-            response = st.session_state.chat_session.send_message(prompt)
+            response = st.session_state.chat_session.send_message(internal_prompt)
             st.markdown(response.text)
             st.session_state.messages.append({"role": "assistant", "content": response.text})
         except Exception as e:
