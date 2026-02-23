@@ -85,7 +85,8 @@ client = genai.Client(api_key=API_KEY)
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
-if "active_persona" not in st.session_state or st.session_state.active_persona != current_instruction:
+# Added check for missing or None chat_session
+if "chat_session" not in st.session_state or st.session_state.chat_session is None or st.session_state.get("active_persona") != current_instruction:
     st.session_state.active_persona = current_instruction
     st.session_state.messages = []
     
@@ -96,7 +97,6 @@ if "active_persona" not in st.session_state or st.session_state.active_persona !
             tools=[{"google_search": {}}]
         )
     )
-
 # --- 7. CHAT UI ---
 st.title(f"🏢 {selected_business}")
 
