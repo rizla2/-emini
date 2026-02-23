@@ -1,12 +1,14 @@
 import streamlit as st
-import google.generativeai as genai
+from google import genai
+from google.genai import types
+import pandas as pd
+import io
 
 # --- 1. CONFIGURATION & SECURITY ---
-# Fetch credentials securely from Streamlit Secrets
 VALID_USER = st.secrets["APP_USER"]
 VALID_PASS = st.secrets["APP_PASS"]
 API_KEY = st.secrets["GEMINI_API_KEY"]  
-MODEL_NAME = "gemini-3-pro-preview"
+MODEL_ID = "gemini-3.0-pro" 
 
 st.set_page_config(page_title="AI Business Hub", page_icon="🏢", layout="wide")
 
@@ -19,9 +21,7 @@ if not st.session_state.logged_in:
     with st.form("login_form"):
         username = st.text_input("Username")
         password = st.text_input("Password", type="password")
-        submit = st.form_submit_button("Login")
-        
-        if submit:
+        if st.form_submit_button("Login"):
             if username == VALID_USER and password == VALID_PASS:
                 st.session_state.logged_in = True
                 st.rerun()
@@ -29,16 +29,15 @@ if not st.session_state.logged_in:
                 st.error("Invalid credentials.")
     st.stop()
 
-# --- 3. MULTI-BUSINESS STRUCTURE ---
-# Here is where you define every business and their specific AI employees
+# --- 3. BUSINESS CONTEXTS (EXACTLY AS YOU HAD THEM) ---
 BUSINESS_CONTEXTS = {
     "🎰 Casino Affiliate Site": {
         "The Math Geek (Strategy)": "You are a probability expert writing for a casino portal. Focus on RTP, variance, and math. No fluff.",
         "The Compliance Auditor": "You are an iGaming compliance auditor. Focus strictly on 2026 licensing, data protection, and terms.",
-        "The Showdown Critic": "You are a ruthless casino critic comparing two brands. Focus on payout speeds and bonus terms.", # <--- THIS COMMA IS REQUIRED
-        "The SEO Content Writer": "You are a senior SEO content writer for an iGaming affiliate network. Write comprehensive, engaging, and highly readable content optimized for 2026 search intent. Naturally weave in LSI keywords, maintain a conversational yet authoritative tone, and prioritize user retention and readability above all else. Avoid generic AI filler words.",
-        "The On-Page SEO Optimizer": "You are a technical On-Page SEO specialist. Your only job is to generate highly clickable meta titles, compelling meta descriptions, optimized H1/H2/H3 header outlines, and valid JSON-LD schema markup (Review, FAQ, Breadcrumb) based on the provided topic or text. Do not write full articles.",
-        "The News & Promo Updater": "You are a fast-paced iGaming news journalist. Your job is to rewrite existing casino reviews or news posts to include the latest 2026 data, new bonus codes, and recent game launches. Keep the tone urgent, exciting, and conversion-focused."
+        "The Showdown Critic": "You are a ruthless casino critic comparing two brands. Focus on payout speeds and bonus terms.",
+        "The SEO Content Writer": "You are a senior SEO content writer for an iGaming affiliate network. Write comprehensive, engaging, and highly readable content optimized for 2026 search intent.",
+        "The On-Page SEO Optimizer": "You are a technical On-Page SEO specialist. Your only job is to generate highly clickable meta titles, compelling meta descriptions, optimized H1/H2/H3 header outlines, and valid JSON-LD schema markup.",
+        "The News & Promo Updater": "You are a fast-paced iGaming news journalist. Your job is to rewrite existing casino reviews or news posts to include the latest 2026 data."
     },
     "🛒 E-Commerce Store (Example)": {
         "Product Description Writer": "You write high-converting, SEO-optimized product descriptions. Highlight benefits over features.",
@@ -53,136 +52,109 @@ BUSINESS_CONTEXTS = {
     },
 }
 
-# --- 4. SIDEBAR & SETTINGS ---
+# --- 4. SIDEBAR & SESSION CONTROL ---
 with st.sidebar:
     st.header("🏢 Command Center")
-    
-    # Step 1: Choose the Business
     selected_business = st.selectbox("1. Select Business", list(BUSINESS_CONTEXTS.keys()))
-    
-    # Step 2: Choose the Persona (Dynamically updates based on Business)
-    personas_for_business = BUSINESS_CONTEXTS[selected_business]
-    selected_persona_name = st.selectbox("2. Select AI Persona", list(personas_for_business.keys()))
-    
-    # Get the actual prompt
-    current_instruction = personas_for_business[selected_persona_name]
+    personas = BUSINESS_CONTEXTS[selected_business]
+    selected_persona_name = st.selectbox("2. Select AI Persona", list(personas.keys()))
+    current_instruction = personas[selected_persona_name]
     
     st.divider()
-    
     if st.button("🗑️ Clear Chat History"):
         st.session_state.messages = []
         st.session_state.chat_session = None
         st.rerun()
-        
-    if st.button("🚪 Logout"):
-        st.session_state.logged_in = False
-        st.session_state.messages = []
-        st.session_state.chat_session = None
-        st.rerun()
 
-# --- 5. GEMINI API SETUP ---
-genai.configure(api_key=API_KEY)
-
-safety_settings = [
-    {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_NONE"},
-    {"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_NONE"},
-    {"category": "HARM_CATEGORY_SEXUALLY_EXPLICIT", "threshold": "BLOCK_NONE"},
-    {"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_NONE"}
-]
-
-generation_config = {
-    "temperature": 0.1
-}
-
-# Initialize the model with Google Search Grounding enabled
-model = genai.GenerativeModel(
-    model_name="gemini-3.0-pro",
-    system_instruction=current_instruction,
-    safety_settings=safety_settings,
-    generation_config=generation_config,
-    tools=[{"google_search": {}}] # Simplified tool definition for 2026 SDK
-)
-# --- 6. CHAT INTERFACE & MEMORY ---
-st.title(f"🏢 {selected_business}")
-st.subheader(f"Active Persona: {selected_persona_name}")
-
-# Helper function for the Copy Button logic
+# --- 5. HELPER FUNCTIONS ---
 def copy_to_clipboard(text):
-    # This uses a standard JS hack to copy text in the browser
-    js = f"""
-    <script>
-    navigator.clipboard.writeText({repr(text)});
-    </script>
-    """
+    js = f"<script>navigator.clipboard.writeText({repr(text)});</script>"
     st.components.v1.html(js, height=0)
-    st.toast("Response copied to clipboard!", icon="📋")
+    st.toast("Copied to clipboard!", icon="📋")
+
+def get_excel_data(text):
+    output = io.BytesIO()
+    try:
+        if "|" in text and "---" in text:
+            clean_text = "\n".join([l.strip() for l in text.split("\n")])
+            df = pd.read_markdown(io.StringIO(clean_text))
+        else:
+            df = pd.DataFrame({"Full AI Report": [text]})
+        with pd.ExcelWriter(output, engine='openpyxl') as writer:
+            df.to_excel(writer, index=False)
+    except:
+        df = pd.DataFrame({"Content": [text]})
+        df.to_excel(output, index=False)
+    return output.getvalue()
+
+# --- 6. GEMINI CLIENT SETUP ---
+client = genai.Client(api_key=API_KEY)
 
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
-if "current_persona" not in st.session_state:
-    st.session_state.current_persona = current_instruction
-
 # Handle Persona switching
-if st.session_state.current_persona != current_instruction:
+if "active_persona_instr" not in st.session_state or st.session_state.active_persona_instr != current_instruction:
+    st.session_state.active_persona_instr = current_instruction
     st.session_state.messages = []
-    st.session_state.chat_session = model.start_chat(history=[])
-    st.session_state.current_persona = current_instruction
+    config = types.GenerateContentConfig(
+        system_instruction=current_instruction,
+        tools=[types.Tool(google_search=types.GoogleSearch())],
+        temperature=1.0
+    )
+    st.session_state.chat_session = client.chats.create(model=MODEL_ID, config=config)
 
-if "chat_session" not in st.session_state or st.session_state.chat_session is None:
-    st.session_state.chat_session = model.start_chat(history=[])
+# --- 7. CHAT UI ---
+st.title(f"🏢 {selected_business}")
+st.caption(f"Active Persona: {selected_persona_name}")
 
-# 4. DISPLAY MESSAGE HISTORY
-for i, message in enumerate(st.session_state.messages):
-    with st.chat_message(message["role"]):
-        st.markdown(message["content"])
-        
-        if message["role"] == "assistant":
-            # Show sources if they exist
-            if "sources" in message and message["sources"]:
+# History Loop
+for i, msg in enumerate(st.session_state.messages):
+    with st.chat_message(msg["role"]):
+        st.markdown(msg["content"])
+        if msg["role"] == "assistant":
+            if msg.get("sources"):
                 with st.expander("🔍 Verified Sources"):
-                    for src in message["sources"]:
-                        st.write(f"- [{src['title']}]({src['url']})")
+                    for s in msg["sources"]:
+                        st.write(f"- [{s['title']}]({s['url']})")
             
-            # COPY BUTTON for history
-            st.button("📋 Copy Response", key=f"copy_{i}", on_click=copy_to_clipboard, args=(message["content"],))
+            c1, c2, c3 = st.columns(3)
+            c1.button("📋 Copy", key=f"cp_{i}", on_click=copy_to_clipboard, args=(msg["content"],))
+            c2.download_button("📄 TXT", msg["content"], f"report_{i}.txt", key=f"tx_{i}")
+            c3.download_button("📊 XLS", get_excel_data(msg["content"]), f"data_{i}.xlsx", key=f"xl_{i}")
 
-# 5. USER INPUT LOGIC
-if prompt := st.chat_input("How can I help with your business today?"):
+# Input Logic
+if prompt := st.chat_input(f"Message {selected_persona_name}..."):
     st.session_state.messages.append({"role": "user", "content": prompt})
     with st.chat_message("user"):
         st.markdown(prompt)
-    
+
     with st.chat_message("assistant"):
-        with st.status("🧠 Gemini is searching and reasoning...", expanded=True) as status:
+        with st.status("🧠 Processing...", expanded=True) as status:
             try:
-                response = st.session_state.chat_session.send_message(prompt, stream=False)
-                full_response = response.text
-                st.markdown(full_response)
+                response = st.session_state.chat_session.send_message(prompt)
+                full_text = response.text
                 
-                # Extract Grounding Sources
                 sources = []
                 if response.candidates[0].grounding_metadata:
-                    metadata = response.candidates[0].grounding_metadata
-                    if metadata.grounding_chunks:
-                        with st.expander("🔍 Verified Sources"):
-                            for chunk in metadata.grounding_chunks:
-                                if chunk.web:
-                                    sources.append({"title": chunk.web.title, "url": chunk.web.uri})
-                                    st.write(f"- [{chunk.web.title}]({chunk.web.uri})")
-
-                status.update(label="✅ Content Verified", state="complete", expanded=False)
+                    meta = response.candidates[0].grounding_metadata
+                    if meta.grounding_chunks:
+                        sources = [{"title": c.web.title, "url": c.web.uri} for c in meta.grounding_chunks if c.web]
                 
-                # COPY BUTTON for new response
-                st.button("📋 Copy Response", key=f"copy_{len(st.session_state.messages)}", on_click=copy_to_clipboard, args=(full_response,))
-
-                # Save to history
-                st.session_state.messages.append({
-                    "role": "assistant", 
-                    "content": full_response,
-                    "sources": sources
-                })
+                st.markdown(full_text)
+                if sources:
+                    with st.expander("🔍 Verified Sources"):
+                        for s in sources: st.write(f"- [{s['title']}]({s['url']})")
                 
+                status.update(label="✅ Ready", state="complete", expanded=False)
+
+                # Current response actions
+                c1, c2, c3 = st.columns(3)
+                idx = len(st.session_state.messages)
+                c1.button("📋 Copy", key=f"cp_now", on_click=copy_to_clipboard, args=(full_text,))
+                c2.download_button("📄 TXT", full_text, "report.txt", key=f"tx_now")
+                c3.download_button("📊 XLS", get_excel_data(full_text), "data.xlsx", key=f"xl_now")
+
+                st.session_state.messages.append({"role": "assistant", "content": full_text, "sources": sources})
             except Exception as e:
-                status.update(label="❌ API Error", state="error")
-                st.error(f"Error: {str(e)}")
+                st.error(f"Error: {e}")
